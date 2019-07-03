@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import collections
 import json
@@ -6,6 +7,10 @@ from pathlib import Path
 from typing import Mapping
 
 from aiohttp import web
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--port', type=int, default=8002)
+args = parser.parse_args()
 
 routes = web.RouteTableDef()
 conditions: Mapping[str, asyncio.Condition] = collections.defaultdict(asyncio.Condition)
@@ -22,13 +27,7 @@ def get_state(name: str):
     else:
         return None
 
-@routes.route('GET', '/apps/{name:[a-zA-Z0-9_-]{,32}}')
-async def server_get_app(request: web.Request):
-    name: str = request.match_info['name']
-    print('GET /apps/' + name)
-    assert name.isalnum()
-    path = (Path('apps')/name).with_suffix('.html')
-    return web.FileResponse(path)
+routes.static(prefix='/static', path=Path.cwd()/'static', follow_symlinks=True)
 
 @routes.route('GET', '/states/{name:[a-zA-Z0-9]{,32}}')
 async def server_get_state(request: web.Request):
@@ -80,4 +79,4 @@ async def server_post_state(request: web.Request):
 
 app = web.Application()
 app.add_routes(routes)
-web.run_app(app)
+web.run_app(app, port=args.port)
