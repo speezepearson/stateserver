@@ -1,11 +1,10 @@
 import argparse
 import asyncio
 import collections
-import dataclasses
 import json
 import pprint
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, NamedTuple
 
 from aiohttp import web
 
@@ -14,8 +13,7 @@ parser.add_argument('-d', '--state-dir', type=Path, default=Path.cwd())
 parser.add_argument('-p', '--port', type=int, default=8002)
 args = parser.parse_args()
 
-@dataclasses.dataclass
-class Resource:
+class Resource(NamedTuple): # would like to use dataclasses, but installing 3.7 is nontrivial
     path: Path
 
     def get(self):
