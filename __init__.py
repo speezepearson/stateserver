@@ -11,6 +11,10 @@ from aiohttp import web
 
 ResourceName = NewType('ResourceName', str)
 
+def allow_all_origins(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
 class Resource(NamedTuple): # would like to use dataclasses, but installing 3.7 is nontrivial
     path: Path
 
@@ -41,7 +45,7 @@ async def get_state_response(request: web.Request, state_dir: Path, conditions: 
     name: ResourceName = request.match_info['name']
     resource = Resource(get_state_path(state_dir, name))
     async with conditions[name]:
-        return web.json_response({"current_state": resource.get()})
+        return allow_all_origins(web.json_response({"current_state": resource.get()}))
 
 async def poll_response(request: web.Request, state_dir: Path, conditions: Mapping[ResourceName, asyncio.Condition]):
     name: ResourceName = request.match_info['name']
@@ -50,13 +54,13 @@ async def poll_response(request: web.Request, state_dir: Path, conditions: Mappi
     try:
         old_state = (await request.json())['current_state']
     except ValueError:
-        return web.Response(body='syntactically invalid JSON request', status=400)
+        return allow_all_origins(web.Response(body='syntactically invalid JSON request', status=400))
     except (TypeError, KeyError) as e:
-        return web.Response(body=f'semantically invalid JSON request: {e}', status=400)
+        return allow_all_origins(web.Response(body=f'semantically invalid JSON request: {e}', status=400))
     condition = conditions[name]
     async with condition:
         await condition.wait_for(lambda: resource.get() != old_state)
-        return web.json_response({"current_state": resource.get()})
+        return allow_all_origins(web.json_response({"current_state": resource.get()}))
 
 async def post_state_response(request: web.Request, state_dir: Path, conditions: Mapping[ResourceName, asyncio.Condition]):
     name: ResourceName = request.match_info['name']
@@ -64,9 +68,9 @@ async def post_state_response(request: web.Request, state_dir: Path, conditions:
     try:
         request_state = await request.json()
     except ValueError:
-        return web.Response(body='syntactically invalid JSON request', status=400)
+        return allow_all_origins(web.Response(body='syntactically invalid JSON request', status=400))
     if not (isinstance(request_state, dict) and set(request_state.keys()) == {'old', 'new'}):
-        return web.Response(body='semantically invalid JSON request', status=400)
+        return allow_all_origins(web.Response(body='semantically invalid JSON request', status=400))
     request_old = request_state['old']
     request_new = request_state['new']
 
@@ -75,6 +79,6 @@ async def post_state_response(request: web.Request, state_dir: Path, conditions:
         if current == request_old:
             resource.put(request_new)
             conditions[name].notify_all()
-            return web.json_response({"success": True, "current_state": request_new})
+            return allow_all_origins(web.json_response({"success": True, "current_state": request_new}))
         else:
-            return web.json_response({"success": False, "current_state": current})
+            return allow_all_origins(web.json_response({"success": False, "current_state": current}))
