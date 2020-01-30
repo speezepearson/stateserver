@@ -27,7 +27,7 @@ class Resource(NamedTuple): # would like to use dataclasses, but installing 3.7 
     def put(self, j):
         json.dump(j, self.path.open('w'))
 
-def make_routes(state_dir: Path) -> Iterable[web.RouteDef]:
+def make_routes(state_dir: Path, unsafe: bool = False) -> Iterable[web.RouteDef]:
     conditions: Mapping[ResourceName, asyncio.Condition] = collections.defaultdict(asyncio.Condition)
     for method, path, func in [('GET', '/{name:[a-zA-Z0-9]{,32}}', get_state_response),
                                ('POST', '/{name:[a-zA-Z0-9]{,32}}/poll', poll_response),
@@ -35,6 +35,22 @@ def make_routes(state_dir: Path) -> Iterable[web.RouteDef]:
                                ]:
         yield web.route(method, path, partial(func, state_dir=state_dir, conditions=conditions))
 
+    if unsafe:
+        yield web.route('OPTIONS', '/{path:.*}', _unsafe_admit_all_cors)
+
+async def _unsafe_admit_all_cors(request: web.Request, path: str=''):
+    return web.Response(headers={
+        'Access-Control-Allow-Method': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Origin': '*',
+    })
+
+from aiohttp.web import middleware
+@middleware
+async def _unsafe_allow_all_origins(request: web.Request, handler: web.RequestHandler):
+    resp = await handler(request)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 def get_state_path(state_dir: Path, name: ResourceName) -> Path:
     if not name.isalnum():
